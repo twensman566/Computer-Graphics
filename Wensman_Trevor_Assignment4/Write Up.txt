@@ -1,0 +1,8 @@
+Programming Assignment 4
+Trevor Wensman
+
+For the first part of the assignment I put a diamond and a chervon into the scene with the lighting with the original sphere like object.
+
+The second part of the project consists of the same objects but with different translations and scaling and the ability to move the light source like the sun moving across the sky.
+
+For the third part of the assignment I took my first program and modified to change the lighting in the scene with two lights that have the ability to turn them on and off.

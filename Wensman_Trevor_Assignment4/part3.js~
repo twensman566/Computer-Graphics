@@ -1,0 +1,602 @@
+// File: matMovingGlobe.js
+
+// Program to draw a rotating ovoid globe revolving around the line z = -x,
+// with four pyramids below;
+// objects are displayed with varying materials under a single light source.
+// Adapted from Angel & Shreiner 2D Sierpinski Gasket, Color Cube programs
+// and recursive sphere.
+// by J. Andrew Whitford Holey, February 23, 2016
+
+var canvas;
+var gl;
+
+// parameters for creating the globe
+const divs          =  8; // number of recursive divisions
+var   numBallPoints = 24; // actual value computed in init
+
+// parameters for the globe transformation matrices
+const sx = 0.4, sy = 0.2, sz = 0.2; // scale factors
+const dx = 0.5, dy = 0.0, dz = 0.0; // translation factors
+
+const xRotateDivs  = 180; // number of positions around the rotation
+var   xRotatePos   =   0; // current position around the rotation
+                          // (0 ... xRotateDivs - 1)
+
+const revolveDivs  = 540; // number of positions around the revolution
+var   revolvePos   =   0; // current position around the revolution
+                          // (0 ... revolveDivs - 1)
+
+const obliqueAngle = -45.0;  // degrees
+
+// constant globe matrices
+const zRotateScaleAndTranslate =
+               mult(mult(translate(dx, dy, dz), scalem(sx, sy, sz)),
+                    rotate(90.0, 0.0, 0.0, 1.0));
+const obliqueRotate = rotate(obliqueAngle, 0.0, 1.0, 0.0);
+
+// parameters for the pyramids (quad based)
+const pyrBaseVerts   = 4;
+var   pyrStart       = numBallPoints;    // actual value computed in init
+var   numPyrPoints   = 6 * pyrBaseVerts; // actual value computed in init
+const psx = 0.4, psy =  0.5, psz = 0.4;  // scale factors
+const pdx = 1, pdy = 1, pdz = 1;  // translation factors
+const pyrScale       = scalem(1, 1, 1);
+
+// parameters for colors, lighting properties and material properties
+const darkGray  = vec4(0.3, 0.3, 0.3, 1.0);
+const gray      = vec4(0.6, 0.6, 0.6, 1.0);
+const white     = vec4(1.0, 1.0, 1.0, 1.0);
+const darkRed   = vec4(0.4, 0.0, 0.1, 1.0);
+const red       = vec4(0.9, 0.1, 0.0, 1.0);
+const green     = vec4(0.0, 0.8, 0.0, 1.0);
+const blue      = vec4(0.1, 0.1, 1.0, 1.0);
+const orange    = vec4(1.0, 0.7, 1.0, 1.0);
+const black		 = vec4(0.0, 0.0, 0.0, 1.0);
+
+var lightOn1 = 1.0;
+var lightAmb  = darkGray;
+var lightDiff = white;
+var lightSpec = white;
+const lightPos  = vec4(-4.0, 2.0, 3.0, 1.0);
+
+var lightOn2 = 1.0;
+var lightAmb2  = gray;
+var lightDiff2 = white;
+var lightSpec2 = white;
+const lightPos2  = vec4(4.0, 2.0, 3.0, 1.0);
+
+const globeAmb  = gray;
+const globeDiff = white;
+const globeSpec = white;
+const globeShin = 300.0;
+
+const pyr1Amb   = orange;
+const pyr1Diff  = orange;
+const pyr1Spec  = white;
+const pyr1Shin  = 150.0;
+
+const pyr2Amb   = green;
+const pyr2Diff  = green;
+const pyr2Spec  = white;
+const pyr2Shin  =  50.0;
+
+const pyr3Amb   = blue;
+const pyr3Diff  = blue;
+const pyr3Spec  = white;
+const pyr3Shin  = 150.0;
+
+const pyr4Amb   = darkRed;
+const pyr4Diff  = darkRed;
+const pyr4Spec  = red;
+const pyr4Shin  =  50.0;
+
+// uniform variables
+var light_position;
+var light_position2;
+var ambient_product;
+var diffuse_product;
+var specular_product;
+var shininess;
+var onposition;
+var onposition2;
+
+// parameters for viewer position
+const initViewerDist  =  4.0;
+const minViewerDist   =  2.0;
+const maxViewerDist   = 10.0;
+const maxOffsetRatio  =  1.0;
+const deltaViewerDist =  0.25;
+const deltaOffset     =  0.1;
+var   eye             = vec3(0.0, 0.0, initViewerDist+1);
+const at              = vec3(0.0, 0.0, 0.0);
+const up              = vec3(0.0, 1.0, 0.0);
+
+// Projection transformation parameters
+var   fieldOfViewY = 40.0,
+      aspectRatio  =  1.0, // actual value set in init
+      zNear        =  1.0,
+      zFar         = 20.0;
+
+var runAnimation = false;
+
+var modelViewLoc;  // uniform location of the modelView matrix
+var projectionLoc; // uniform location of the projection matrix
+var normalLoc;     // uniform location of the normal matrix
+
+
+window.onload = function init()
+{
+    canvas = document.getElementById("gl-canvas");
+    aspectRatio  =  canvas.width / canvas.height;
+    
+    gl = WebGLUtils.setupWebGL( canvas );
+    if (!gl) { alert("WebGL isn't available"); }
+
+
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(0.35, 0.45, 0.5, 1.0); // light cyan background
+    
+    gl.enable(gl.DEPTH_TEST);
+    
+    // Declare variables for points and normals
+    var points  = [];
+    var normals = [];
+
+    // Set up the globe
+    numBallPoints    = spherichedron(divs, points);
+    pyrStart         = numBallPoints;
+    // Compute the globe normals for smooth shading
+    for (i = 0; i < numBallPoints; i++) {
+      var nextNormal = vec3();
+      for (j = 0; j < 3; j++) {
+        nextNormal[j] = points[i][j];
+      }
+      normals.push(nextNormal);
+    }
+
+    // Set up the pyramid
+    //normalPyramid(points,normals);
+    //numPyrPoints = newShape(points, normals);
+	newShape2(points,normals);
+	newShape3(points,normals);
+
+    //
+    //  Load shaders and initialize attribute buffers
+    //
+    var program = initShaders(gl, "vertex-shader", "fragment-shader");
+    gl.useProgram(program);
+    
+    var nBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, nBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(normals), gl.STATIC_DRAW);
+
+    var vNormal = gl.getAttribLocation(program, "vNormal");
+    /****** Note the change to 3 for the second parameter ******/
+    gl.vertexAttribPointer(vNormal, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(vNormal);
+
+    var pBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, pBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(points), gl.STATIC_DRAW);
+    
+    var vPosition = gl.getAttribLocation(program, "vPosition");
+    gl.vertexAttribPointer(vPosition, 4, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(vPosition);
+
+    modelViewLoc     = gl.getUniformLocation(program, "model_view");
+    projectionLoc    = gl.getUniformLocation(program, "projection");
+    normalLoc        = gl.getUniformLocation(program, "normal_mat");
+    ambient_product  = gl.getUniformLocation(program, "ambient_product");
+    diffuse_product  = gl.getUniformLocation(program, "diffuse_product");
+    specular_product = gl.getUniformLocation(program, "specular_product");
+    shininess        = gl.getUniformLocation(program, "shininess");
+    light_position   = gl.getUniformLocation(program, "light_position");
+    light_position2  = gl.getUniformLocation(program, "light_position2");
+    on_position = gl.getUniformLocation(program, "light_on");
+    on_position2 = gl.getUniformLocation(program, "light2_on")
+    
+    //event listeners for buttons
+    document.getElementById("startButton").onclick = function () {
+      runAnimation = true;
+      requestAnimFrame(render);
+    };
+    document.getElementById("stopButton").onclick = function () {
+      runAnimation = false;
+    };
+    var offsetRatio;
+    document.getElementById("leftButton").onclick = function () {
+      offsetRatio = eye[0] / eye[2];
+      if (offsetRatio > -maxOffsetRatio) {
+        offsetRatio -= deltaOffset;
+        eye[0] = eye[2] * offsetRatio;
+      }
+      if (!runAnimation) requestAnimFrame(render);
+    };
+    document.getElementById("rightButton").onclick = function () {
+      offsetRatio = eye[0] / eye[2];
+      if (offsetRatio < maxOffsetRatio) {
+        offsetRatio += deltaOffset;
+        eye[0] = eye[2] * offsetRatio;
+      }
+      if (!runAnimation) requestAnimFrame(render);
+    };
+    document.getElementById("downButton").onclick = function () {
+      offsetRatio = eye[1] / eye[2];
+      if (offsetRatio > -maxOffsetRatio) {
+        offsetRatio -= deltaOffset;
+        eye[1] = eye[2] * offsetRatio;
+      }
+      if (!runAnimation) requestAnimFrame(render);
+    };
+    document.getElementById("upButton").onclick = function () {
+      offsetRatio = eye[1] / eye[2];
+      if (offsetRatio < maxOffsetRatio) {
+        offsetRatio += deltaOffset;
+        eye[1] = eye[2] * offsetRatio;
+      }
+      if (!runAnimation) requestAnimFrame(render);
+    };
+    document.getElementById("inButton").onclick = function () {
+      if (eye[2] > minViewerDist) {
+        eye[2] -= deltaViewerDist;
+        offsetRatio = eye[2] / (eye[2] + deltaViewerDist);
+        eye[0] *= offsetRatio;
+        eye[1] *= offsetRatio;
+      }
+      if (!runAnimation) requestAnimFrame(render);
+    };
+    document.getElementById("outButton").onclick = function () {
+      if (eye[2] < maxViewerDist) {
+        eye[2] += deltaViewerDist;
+        offsetRatio = eye[2] / (eye[2] - deltaViewerDist);
+        eye[0] *= offsetRatio;
+        eye[1] *= offsetRatio;
+      }
+      if (!runAnimation) requestAnimFrame(render);
+    };
+	document.getElementById("Light1").onclick = function(){
+	if(lightOn1)
+	{
+		lightOn1 = 0;
+		requestAnimFrame(render);
+	
+	}
+	else{
+
+		lightOn1 = 1;
+		requestAnimFrame(render);
+	}
+	};
+	
+	document.getElementById("Light2").onclick = function(){
+		if(lightOn2)
+		{
+		lightOn2 = 0;
+		requestAnimFrame(render);	
+		}
+		else{
+		lightOn2 = 1;
+		requestAnimFrame(render);	
+		}
+	};
+        
+    render();
+}
+
+
+function newShape3(points, normals)
+{
+	var verts = [
+		vec4(0.0, 0.5, 0.3, 1.0), // 0 TOP FRONT
+		vec4(0.0, 0.5,-0.3, 1.0), // 1 TOP BACK
+		vec4(0.3, -0.3, 0.3, 1.0),// 2 RIGHT BOTTOM FRONT
+		vec4(0.3, -0.3,-0.3, 1.0),// 3 RIGHT BOTTOM BACK
+		vec4(-0.3,-0.3, 0.3, 1.0),// 4 LEFT BOTTOM FRONT
+		vec4(-0.3,-0.3,-0.3, 1.0),// 5 LEFT BOTTOM BACK
+		vec4( 0.0, 0.1, 0.3, 1.0),// 6 BOTTOM MIDDLE FRONT
+		vec4( 0.0, 0.1,-0.3, 1.0) // 7 BOTTOM MIDDLE BACK
+		
+		];
+	var faces = [
+		[0, 1, 4], //LEFT
+		[1, 5, 4],
+		[0, 2, 1], // RIGHT
+		[1, 2, 3],
+		[0, 2, 6], //FRONT MIDDLE
+		[0, 6, 4], 
+		[1, 3, 7],//BACK SIDE
+		[1, 7, 5],
+		[6, 4, 7],//LEFT BOTTOM
+		[7, 4, 5],
+		[6, 7, 3],
+		[6, 3, 2]
+		
+	
+	];
+		  var quasiNorms = [
+    vec3(-1.0, 0.7, 0.0),  // 0 - left
+    vec3(-1.0, 0.7, 0.0), // 1 - left
+    vec3(1.0, 0.7, 0.0),  // 2 -  left
+    vec3(1.0, 0.7, 0.0),   // 3 -  right
+    vec3(0.15, 0.0, 1.0),  // 4 - right middle
+    vec3(-0.15, 0.0, 1.0),   // 5 - left middle
+    vec3(0.15, 0.0, -1.0),  // 0 - right back
+    vec3(-0.15, 0.0, -1.0), // 1 - left back
+    vec3(0, 0, 0),  // 2 - front left
+    vec3(0, 0, 0),   // 3 - front right
+    vec3(0.0, 0, 0),  // 4 - bottom rear
+    vec3(0.0, 0, 0),   // 5 - bottom front
+    vec3(-1.0, -1.0, -1.0), // 1 - rear left
+    vec3(-1.0, -1.0, 1.0),  // 2 - front left
+    vec3(1.0, -1.0, 1.0),   // 3 - front right
+    vec3(0.0, -1.0, 0.0),  // 4 - bottom rear
+    vec3(0.0, -1.0, 0.0)   // 5 - bottom front
+  ];
+	
+  for (i = 0; i < 12; i++) {
+
+    var faceNorm = normalize(quasiNorms[i]);
+	
+    for (j = 0; j < 3; j++) {
+      points.push(verts[faces[i][j]]);
+      normals.push(faceNorm);
+    }
+  }
+}
+function newShape2(points, normals)
+{
+  var verts = [
+    vec4(0.0, 1.0, 0.0, 1.0),  // 0 - apex
+    vec4(1.0, 0.0, 0.0, 1.0),  // 1 - right
+    vec4(0.0, 0.0, -1.0, 1.0), // 2 - rear
+    vec4(-1.0, 0.0, 0.0, 1.0), // 3 - left
+    vec4(0.0, 0.0, 1.0, 1.0),   // 4 - front
+	 vec4(0.0, -1.0, 0.0, 1.0)    // 5
+  ];
+  
+  var faces = [
+    [0, 1, 2],             // 0 - rear right
+    [0, 2, 3],             // 1 - rear left
+    [0, 3, 4],             // 2 - front left
+    [0, 4, 1],             // 3 - front right
+  	 [5, 1, 2],             // 0 - rear right
+    [5, 2, 3],             // 1 - rear left
+    [5, 3, 4],             // 2 - front left
+    [5, 4, 1]             // 3 - front right
+  ];
+	
+	  var quasiNorms = [
+    vec3(1.0, 1.0, -1.0),  // 0 - rear right
+    vec3(-1.0, 1.0, -1.0), // 1 - rear left
+    vec3(-1.0, 1.0, 1.0),  // 2 - front left
+    vec3(1.0, 1.0, 1.0),   // 3 - front right
+    vec3(0.0, -1.0, 0.0),  // 4 - bottom rear
+    vec3(0.0, -1.0, 0.0),   // 5 - bottom front
+    vec3(1.0, -1.0, -1.0),  // 0 - rear right
+    vec3(-1.0, -1.0, -1.0), // 1 - rear left
+    vec3(-1.0, -1.0, 1.0),  // 2 - front left
+    vec3(1.0, -1.0, 1.0),   // 3 - front right
+    vec3(0.0, -1.0, 0.0),  // 4 - bottom rear
+    vec3(0.0, -1.0, 0.0)   // 5 - bottom front
+  ];
+  for (i = 0; i < 8; i++) {
+
+    var faceNorm = normalize(quasiNorms[i]);
+	
+    for (j = 0; j < 3; j++) {
+      points.push(verts[faces[i][j]]);
+      normals.push(faceNorm);
+    }
+  }
+}
+
+function normalPyramid(points, normals) {
+  var verts = [
+    vec4(0.0, 1.0, 0.0, 1.0),  // 0 - apex
+    vec4(1.0, 0.0, 0.0, 1.0),  // 1 - right
+    vec4(0.0, 0.0, -1.0, 1.0), // 2 - rear
+    vec4(-1.0, 0.0, 0.0, 1.0), // 3 - left
+    vec4(0.0, 0.0, 1.0, 1.0),   // 4 - front
+	vec4(0.0, -1.0, 0.0, 1.0)    // 5
+  ];
+  
+  var faces = [
+    [0, 1, 2],             // 0 - rear right
+    [0, 2, 3],             // 1 - rear left
+    [0, 3, 4],             // 2 - front left
+    [0, 4, 1],             // 3 - front right
+  	[5, 1, 2],             // 0 - rear right
+    [5, 2, 3],             // 1 - rear left
+    [5, 3, 4],             // 2 - front left
+    [5, 4, 1]             // 3 - front right
+  ];
+  
+  var quasiNorms = [
+    vec3(1.0, 1.0, -1.0),  // 0 - rear right
+    vec3(-1.0, 1.0, -1.0), // 1 - rear left
+    vec3(-1.0, 1.0, 1.0),  // 2 - front left
+    vec3(1.0, 1.0, 1.0 ),   // 3 - front right
+    vec3(0.0, -1.0, 0.0),  // 4 - bottom rear
+    vec3(0.0, -1.0, 0.0)   // 5 - bottom front
+  ];
+  
+  for (i = 0; i < 6; i++) {
+
+    var faceNorm = normalize(quasiNorms[i]);
+	
+    for (j = 0; j < 3; j++) {
+      points.push(verts[faces[i][j]]);
+      normals.push(faceNorm);
+    }
+  }
+  return 18;
+}
+
+function newShape(points, normals)
+{
+var verts = [
+	vec4(0.5, 0.5, 0.0, 1.0), // 0 TOP
+	vec4(0.6, 0.0, 0.0, 1.0), // 1 LEFT
+	vec4(0.4, 0.0, 0.0, 1.0), // 2 RIGHT
+	vec4(0.5, 0.0,-0.1, 1.0), // 3 BACK
+	vec4(0.5, 0.0, 0.1, 1.0), // 4 FRONT
+	vec4(0.5,-0.5, 0.0, 1.0)  // 5 BOTTOM
+	]
+var faces = [
+	[0, 1, 4],
+	[0, 4, 2],
+	[0, 2, 3],
+	[0, 3, 1],
+	[5, 4, 1],
+	[5, 1, 3],
+	[5, 3, 2],
+	[5, 2, 4]
+	];
+  var quasiNorms = [
+    vec3(1.0, 1.0, -1.0),  // 0 - rear right
+    vec3(-1.0, 1.0, -1.0), // 1 - rear left
+    vec3(-1.0, 1.0, 1.0),  // 2 - front left
+    vec3(1.0, 1.0, 1.0),   // 3 - front right
+    vec3(0.0, -1.0, 0.0),  // 4 - bottom rear
+    vec3(0.0, -1.0, 0.0)   // 5 - bottom front
+  ];
+  
+  for (i = 0; i < 6; i++) {
+
+    var faceNorm = normalize(quasiNorms[i]);
+	
+    for (j = 0; j < 3; j++) {
+      points.push(verts[faces[i][j]]);
+      normals.push(faceNorm);
+    }
+  }
+}
+
+function render()
+{
+  // clear the window
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  // set up projection matrix
+  var projection = perspective(fieldOfViewY, aspectRatio, zNear, zFar);
+  gl.uniformMatrix4fv(projectionLoc, false, flatten(projection));
+
+  // set up view position
+  var viewer = lookAt(eye, at, up);
+
+  // set up light position
+  var newLightPos = vec4();
+  for (i = 0; i < 4; i++) {
+    newLightPos[i] = dot(viewer[i], lightPos);
+  }
+  gl.uniform4fv(light_position, newLightPos);
+
+	newLightPos = vec4();
+  for (i = 0; i < 4; i++) {
+    newLightPos[i] = dot(viewer[i], lightPos2);
+  }
+	gl.uniform4fv(light_position2, newLightPos);
+
+
+	gl.uniform1f(on_position,lightOn1);
+	gl.uniform1f(on_position2, lightOn2)
+  // Set up globe
+  // set up the rotation matrix
+  var xRotationAngle = xRotatePos * 360.0 / xRotateDivs;
+  var xRotation      = rotate(xRotationAngle, 1.0, 0.0, 0.0);
+
+  // set up the revolution matrix
+  var revolveAngle     = revolvePos * 360.0 / revolveDivs;
+  var revolutionRotate = rotate(revolveAngle, 0.0, 0.0, 1.0);
+
+  // set up the globe model_view matrix
+  var mv = mult(mult(mult(viewer, obliqueRotate), revolutionRotate),
+                mult(xRotation, zRotateScaleAndTranslate));
+  gl.uniformMatrix4fv(modelViewLoc, false, flatten(mv));
+  var normalMat = normalMatrix(mv, true); // true makes it return 3 X 3
+  gl.uniformMatrix3fv(normalLoc, false, flatten(normalMat));
+
+  // set up globe lighting properties
+  gl.uniform4fv(ambient_product,  mult(mult(lightAmb, lightAmb2),  globeAmb));
+  gl.uniform4fv(diffuse_product,  mult(mult(lightDiff, lightDiff2), globeDiff));
+  gl.uniform4fv(specular_product, mult(mult(lightSpec, lightSpec2),globeSpec));
+  gl.uniform1f(shininess, globeShin);
+
+  gl.drawArrays(gl.TRIANGLES, 0, numBallPoints);
+
+  // Set up pyramids
+  // right front pyramid
+ //var pyrTranslate = translate(.05, .05, 2.5);
+ // mv = mult(mult(viewer, pyrTranslate),
+  //          mult(pyrScale, rotate(225.0, 0.0, 1.0, 0.0)));
+ // gl.uniformMatrix4fv(modelViewLoc, false, flatten(mv));
+ // normalMat = normalMatrix(mv, true);
+ // gl.uniformMatrix3fv(normalLoc, false, flatten(normalMat));
+
+  // set up pyramid 1 lighting properties
+ // gl.uniform4fv(ambient_product,  mult(lightAmb,  pyr1Amb));
+ // gl.uniform4fv(diffuse_product,  mult(lightDiff, pyr1Diff));
+ // gl.uniform4fv(specular_product, mult(lightSpec, pyr1Spec));
+  //gl.uniform1f(shininess, pyr1Shin);
+
+  //gl.drawArrays(gl.TRIANGLES, pyrStart, 24);
+
+   // right rear pyramid
+   pyrTranslate = translate(1, 0, 1);
+   mv = mult(mult(viewer, pyrTranslate),
+             mult(pyrScale, rotate(225.0, 0.0, 1.0, 0.0)));
+   gl.uniformMatrix4fv(modelViewLoc, false, flatten(mv));
+   normalMat = normalMatrix(mv, true); // true makes it return 3 X 3
+   gl.uniformMatrix3fv(normalLoc, false, flatten(normalMat));
+
+   // set up pyramid 2 lighting properties
+  gl.uniform4fv(ambient_product,  mult(lightAmb,  pyr1Amb));
+  gl.uniform4fv(diffuse_product,  mult(lightDiff, pyr1Diff));
+  gl.uniform4fv(specular_product, mult(lightSpec, pyr1Spec));
+  gl.uniform1f(shininess, pyr1Shin);
+
+
+   gl.drawArrays(gl.TRIANGLES, pyrStart, 24);
+
+  // // left front pyramid
+   pyrTranslate = translate(-pdx, pdy, pdz);
+   mv = mult(mult(viewer, pyrTranslate),
+             mult(pyrScale, rotate(225.0, 0.0, 1.0, 0.0)));
+   gl.uniformMatrix4fv(modelViewLoc, false, flatten(mv));
+   normalMat = normalMatrix(mv, true);
+   gl.uniformMatrix3fv(normalLoc, false, flatten(normalMat));
+
+  // // set up pyramid 3 lighting properties
+  gl.uniform4fv(ambient_product,  mult(mult(lightAmb, lightAmb2), pyr3Amb));
+  gl.uniform4fv(diffuse_product,  mult(mult(lightDiff, lightDiff2), pyr3Diff));
+  gl.uniform4fv(specular_product, mult(mult(lightSpec, lightSpec2), pyr3Spec));
+   gl.uniform1f(shininess, pyr3Shin);
+
+   gl.drawArrays(gl.TRIANGLES, pyrStart+24, numPyrPoints+12);
+
+  // // left rear pyramid
+  // pyrTranslate = translate(-pdx, pdy, -pdz);
+  // mv = mult(mult(viewer, pyrTranslate),
+            // mult(pyrScale, rotate(225.0, 0.0, 1.0, 0.0)));
+  // gl.uniformMatrix4fv(modelViewLoc, false, flatten(mv));
+  // normalMat = normalMatrix(mv, true);
+  // gl.uniformMatrix3fv(normalLoc, false, flatten(normalMat));
+
+  // // set up pyramid 4 lighting properties
+  // gl.uniform4fv(ambient_product,  mult(lightAmb,  pyr4Amb));
+  // gl.uniform4fv(diffuse_product,  mult(lightDiff, pyr4Diff));
+  // gl.uniform4fv(specular_product, mult(lightSpec, pyr4Spec));
+  // gl.uniform1f(shininess, pyr4Shin);
+
+  // gl.drawArrays(gl.TRIANGLES, pyrStart, numPyrPoints);
+
+  if (runAnimation) {
+    // set up new animation frame
+    xRotatePos = (xRotatePos + 1) % xRotateDivs;
+    revolvePos = (revolvePos + 1) % revolveDivs;
+    
+    requestAnimFrame(render);
+  }
+
+}
+

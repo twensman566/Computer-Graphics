@@ -1,0 +1,91 @@
+/*
+ * File: Image2TextureScript.java
+ */
+
+import java.io.*;
+import acm.program.*;
+import acm.graphics.*;
+import acm.util.ErrorException;
+
+/**
+ * This program reads an image file and writes the image pixels
+ * to a JavaScript file with the following format:
+ * the first line contains a global variable declaration with
+ * a name specified by user input;
+ * the next two lines contain variable declarations for the 
+ * height and width of the texture in texels;
+ * the next line contains a function header with a function name
+ * <i>init&lt;global variable name&gt</i>;
+ * the next 4*width*height lines assign the RGBA values for
+ * each texel (0 ... 255) in row major order;
+ * the final line completes the function.
+ * 
+ * @author J. Andrew Whitford Holey
+ * @version March 18, 2016
+ */
+public class Image2TextureScript extends DialogProgram {
+  
+  public void run() {
+    String imgFileName = this.readLine("Enter the name of the image file: ");
+    GImage image = null;
+    try {
+      image = new GImage(imgFileName);
+    } catch (Exception ioe) {
+      System.err.println("Unable to open file: " + imgFileName +
+                         " as GImage.");
+      System.exit(1);
+    }
+    String textureFileName =
+      this.readLine("Enter the name of the texture file (.js): ");
+    PrintWriter textureFile = null;
+    try {
+      textureFile = new PrintWriter(textureFileName);
+    } catch (FileNotFoundException fnfe) {
+      System.err.println("Unable to open file: " + textureFileName +
+                         " for writing.");
+      System.exit(1);
+    }
+    String textureVariableName =
+      this.readLine("Enter the name of the texture variable: ");
+
+    int [][] pixels = image.getPixelArray();
+    int height = pixels.length;
+    int width  = pixels[0].length;
+    
+    textureFile.printf("var %s = new Uint8Array(%d);\n",
+                       textureVariableName, 4*width*height);
+    textureFile.printf("var %sHeight = %d;\n",
+                       textureVariableName, height);
+    textureFile.printf("var %sWidth = %d;\n\n",
+                       textureVariableName, width);
+                       
+    textureFile.printf("function init%s() {\n", textureVariableName);
+    
+    int index = 0;
+    for(int i = 0; i < height; i++) {
+      for(int j = 0; j < width; j++) {
+        int pixel = pixels[i][j];
+        int r = GImage.getRed(pixel);
+        int g = GImage.getGreen(pixel);
+        int b = GImage.getBlue(pixel);
+        int a = GImage.getAlpha(pixel);
+    
+        textureFile.printf("  %s[%d] = %d;\n", textureVariableName, index++, r);
+        textureFile.printf("  %s[%d] = %d;\n", textureVariableName, index++, g);
+        textureFile.printf("  %s[%d] = %d;\n", textureVariableName, index++, b);
+        textureFile.printf("  %s[%d] = %d;\n", textureVariableName, index++, a);
+      }
+    }
+    
+    textureFile.printf("}\n");
+    
+    textureFile.close();
+
+  }
+  
+  public static void main(String [] args) {
+    new Image2TextureScript().start();
+  }
+  
+}
+     
