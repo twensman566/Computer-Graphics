@@ -275,6 +275,8 @@ function render()
 {
   // clear the window
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  
+
 
   // set up projection matrix
   var projection = perspective(fieldOfViewY, aspectRatio, zNear, zFar);
@@ -360,6 +362,7 @@ function render()
   if (runAnimation || flying || right) {
     requestAnimFrame(render);
   }
+  
 
 }
 
