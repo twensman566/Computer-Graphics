@@ -5,7 +5,7 @@
 //      Utah teapot.
 //
 
-var numTeapotPatches = 3;
+var numTeapotPatches = 4;
 
 var indices = new Array(numTeapotPatches);
 
@@ -34,9 +34,9 @@ indices[1] = [
     ];
     indices[3]=
     [
-	48,49,51,52,
-	53,54,55,56,
-	57,58,59,60,
-	61,62,63,64
+	48,49,50,51,
+	52,53,54,55,
+	56,57,58,59,
+	60,61,62,63
     ];
     
