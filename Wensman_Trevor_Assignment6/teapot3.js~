@@ -45,12 +45,17 @@ onload = function init()  {
     gl.clearColor( 0.5, 0.0, 1.0, 1.0 );
 
     var h = 1.0/numDivisions;
-
+	 
+	 var scalerMat = mat4(1, 0, 0, 0
+	 							 0, 1, 0, 0
+	 							 0, 0, 1, 0
+	 							 0, 0, 0, 1);	 
+	 
     var patch = new Array(numTeapotPatches);
     for(var i=0; i<numTeapotPatches; i++) patch[i] = new Array(16);
     for(var i=0; i<numTeapotPatches; i++)
         for(j=0; j<16; j++) {
-            patch[i][j] = vec4([vertices[indices[i][j]][0],
+            patch[i][j] = vec4([mult(vertices[indices[i][j]][0], scalerMat),
              vertices[indices[i][j]][2],
                 vertices[indices[i][j]][1], 1.0]);
     }
@@ -120,9 +125,9 @@ render = function(){
 
             modelView = mat4();
 
-            modelView = mult(modelView, rotate(theta[xAxis], [0, 0, 0]));
-            modelView = mult(modelView, rotate(theta[yAxis], [0, 0, 0]));
-            modelView = mult(modelView, rotate(theta[zAxis], [0, 0, 0]));
+            modelView = mult(modelView, rotate(theta[xAxis], [1, 0, 0]));
+            modelView = mult(modelView, rotate(theta[yAxis], [0, 1, 0]));
+            modelView = mult(modelView, rotate(theta[zAxis], [0, 0, 1]));
 
 
             gl.uniformMatrix4fv( gl.getUniformLocation(program, "ModelView"), false, flatten(modelView) );

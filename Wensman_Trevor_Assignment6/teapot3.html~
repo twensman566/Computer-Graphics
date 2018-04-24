@@ -27,7 +27,8 @@ precision mediump float;
 void
 main()
 {
-    gl_FragColor = vec4(0.0, 0.75, 0.0, 1.0);;
+	 Math.random();
+    gl_FragColor = vec4(0.0, 0.75, 0.0, 1.0);
 }
 </script>
 
