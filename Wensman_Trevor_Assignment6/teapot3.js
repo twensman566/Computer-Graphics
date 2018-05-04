@@ -44,38 +44,7 @@ onload = function init()  {
 
     gl.clearColor( 0.5, 0.0, 1.0, 1.0 );
 
-    var h = 1.0/numDivisions;
 
-    var patch = new Array(numTeapotPatches);
-    for(var i=0; i<numTeapotPatches; i++) patch[i] = new Array(16);
-    for(var i=0; i<numTeapotPatches; i++)
-        for(j=0; j<16; j++) {
-            patch[i][j] = vec4([vertices[indices[i][j]][0],
-             vertices[indices[i][j]][2],
-                vertices[indices[i][j]][1], 1.0]);
-    }
-
-
-    for ( var n = 0; n < numTeapotPatches; n++ ) {
-
-    var data = new Array(numDivisions+1);
-    for(var j = 0; j<= numDivisions; j++) data[j] = new Array(numDivisions+1);
-    for(var i=0; i<=numDivisions; i++) for(var j=0; j<= numDivisions; j++) {
-        data[i][j] = vec4(0,0,0,1);
-        var u = i*h;
-        var v = j*h;
-        var t = new Array(4);
-        for(var ii=0; ii<4; ii++) t[ii]=new Array(4);
-        for(var ii=0; ii<4; ii++) for(var jj=0; jj<4; jj++)
-            t[ii][jj] = bezier(u)[ii]*bezier(v)[jj];
-
-
-        for(var ii=0; ii<4; ii++) for(var jj=0; jj<4; jj++) {
-            var temp = vec4(patch[n][4*ii+jj]);
-            temp = scale( t[ii][jj], temp);
-            data[i][j] = add(data[i][j], temp);
-        }
-    }
 
     document.getElementById("ButtonX").onclick = function(){axis = xAxis;};
     document.getElementById("ButtonY").onclick = function(){axis = yAxis;};
